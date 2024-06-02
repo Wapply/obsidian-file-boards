@@ -1,0 +1,13 @@
+{
+	"id": "file-boards",
+	"name": "File Boards",
+	"version": "1.0.0",
+	"description": "Displays notes as cards/pins on a board for easy visualization.",
+	"author": "Wapply",
+	"authorUrl": "https://github.com/Wapply",
+	"fundingUrl": {
+		"Buy Me a Coffee": "https://ko-fi.com/wapply"
+	},
+	"minAppVersion": "1.5.12",
+	"isDesktopOnly": false
+}
