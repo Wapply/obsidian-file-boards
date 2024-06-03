@@ -1,8 +1,15 @@
 import { App, ItemView, Modal, Plugin, TFile, Vault, WorkspaceLeaf, TFolder } from 'obsidian';
+import { CardBoardSettingTab, CardBoardPluginSettings, DEFAULT_SETTINGS } from "./settings";
 
 export default class CardBoardPlugin extends Plugin {
+  settings: CardBoardPluginSettings;
+  view: CardBoardView;
+
   async onload() {
     console.log('Loading CardBoard Plugin');
+
+    await this.loadSettings();
+    this.addSettingTab(new CardBoardSettingTab(this.app, this));
 
     this.addRibbonIcon('blocks', 'CardBoard', () => this.openCardBoard());
 
@@ -14,7 +21,10 @@ export default class CardBoardPlugin extends Plugin {
 
     this.registerView(
       'card-board-view',
-      (leaf) => new CardBoardView(leaf, this.app.vault)
+      (leaf) => {
+        this.view = new CardBoardView(leaf, this.app.vault, this); // Pass "this" (the plugin instance)
+        return this.view;
+      }
     );
 
     this.app.workspace.onLayoutReady(() => this.activateView());
@@ -36,16 +46,26 @@ export default class CardBoardPlugin extends Plugin {
     this.app.workspace.detachLeavesOfType('card-board-view');
     console.log('Unloading CardBoard Plugin');
   }
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
 }
 
 class CardBoardView extends ItemView {
   private vault: Vault;
   private folderStack: TFolder[];
+  private plugin: CardBoardPlugin; // Add the plugin property
 
-  constructor(leaf: WorkspaceLeaf, vault: Vault) {
+  constructor(leaf: WorkspaceLeaf, vault: Vault, plugin: CardBoardPlugin) { // Add plugin to constructor
     super(leaf);
     this.vault = vault;
     this.folderStack = [this.vault.getRoot()];
+    this.plugin = plugin; // Assign the plugin instance
   }
 
   getViewType(): string {
@@ -73,7 +93,7 @@ class CardBoardView extends ItemView {
     const folderHeader = folderContainer.createDiv({ cls: 'folder-header' });
 
     if (this.folderStack.length > 1) {
-      const backButton = folderHeader.createEl('button', { cls: 'back-button', text: '← Back' });
+      const backButton = folderHeader.createEl('button', { cls: 'back-button', text: '←' });
       backButton.addEventListener('click', () => {
         this.folderStack.pop();
         this.renderView();
@@ -97,7 +117,12 @@ class CardBoardView extends ItemView {
   }
 
   createFolderCard(folder: TFolder): HTMLElement {
-    const card = createDiv({ cls: ['card', 'folder-card'], text: folder.name });
+    const card = createDiv({ cls: ['card', 'folder-card'] });
+  
+    // Display folder name directly:
+    const titleContainer = card.createDiv({ cls: 'folder-title' });
+    titleContainer.textContent = folder.name;
+  
     card.addEventListener('click', () => {
       this.folderStack.push(folder);
       this.renderView();
@@ -105,8 +130,13 @@ class CardBoardView extends ItemView {
     return card;
   }
 
-async createCard(file: TFile): Promise<HTMLElement> {
-    const card = createDiv({ cls: 'card' });
+  async createCard(file: TFile): Promise<HTMLElement> {
+    const card = createDiv({ 
+      cls: 'card',
+      attr: {
+        style: `width: ${this.plugin.settings.cardWidth}px; height: ${this.plugin.settings.cardHeight}px;` 
+      }
+    });
 
     // Add a container for the note title
     const titleContainer = card.createDiv({ cls: 'card-title' });
@@ -114,13 +144,19 @@ async createCard(file: TFile): Promise<HTMLElement> {
 
     const thumb = await this.getThumbnail(file);
     if (thumb) {
-      card.createEl('img', { attr: { src: thumb } });
-    }  else {
+      card.appendChild(thumb); // Append the thumbnail element (image or video)
+    } else {
       card.textContent = file.basename;
     }
 
     card.addEventListener('click', () => {
-      this.app.workspace.openLinkText(file.path, '', true);
+      const filePath = file.path;
+  
+      if (this.plugin.settings.openNoteInNewTab) {
+        this.app.workspace.openLinkText(filePath, '', true, { active: true }); // New tab
+      } else {  
+        this.app.workspace.openLinkText(filePath, '', false); // Same tab (changed to false)
+      }
     });
 
     const configButton = card.createEl('button', { cls: 'config-button', text: '⚙' });
@@ -132,25 +168,41 @@ async createCard(file: TFile): Promise<HTMLElement> {
     return card;
   }
 
-  async getThumbnail(file: TFile): Promise<string | null> {
+  async getThumbnail(file: TFile): Promise<HTMLElement | null> {
     const content = await this.vault.cachedRead(file);
   
+    // Updated regex to include video extensions:
     const imageRegex = /!\[\[(.*?)\]\]|!\[(.*?)\]\(([^)]*)\)/g;
     let match;
     while ((match = imageRegex.exec(content)) !== null) {
-      let imagePath = match[1] || match[3];
+      let filePath = match[1] || match[3];
   
-      // Specific check for file URLs:
-      if (imagePath.startsWith('file:///')) {
-        imagePath = decodeURI(imagePath)
-                     .replace(/^file:\/{2,3}/, '') // Remove "file://" prefix
-                     .replace(/\\/g, '/');      // Replace backslashes with forward slashes
+      if (filePath.startsWith('file:///')) {
+        filePath = decodeURI(filePath)
+          .replace(/^file:\/{2,3}/, '')
+          .replace(/\\/g, '/');
       }
   
-      if (imagePath && /\.(jpg|jpeg|png|gif|bmp)$/.test(imagePath)) {
-        const fileLink = this.app.metadataCache.getFirstLinkpathDest(imagePath, file.path);
+      // Check if it's an image or video:
+      if (/\.(jpg|jpeg|png|gif|bmp|mp4|webm)$/i.test(filePath)) { 
+        const fileLink = this.app.metadataCache.getFirstLinkpathDest(filePath, file.path);
         if (fileLink) {
-          return this.vault.adapter.getResourcePath(fileLink.path);
+          const resourcePath = this.vault.adapter.getResourcePath(fileLink.path);
+  
+          // Create an image or video element:
+          if (/\.(jpg|jpeg|png|gif|bmp)$/i.test(filePath)) {
+            const img = createEl("img");
+            img.src = resourcePath;
+            return img;
+          } else { // Video
+            const video = createEl("video");
+            video.src = resourcePath;
+            video.controls = true; // Add video controls 
+            video.muted = true;     // Mute by default
+            video.style.width = "100%";
+            video.style.height = "auto";
+            return video;
+          }
         }
       }
     }
