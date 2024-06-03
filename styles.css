@@ -31,37 +31,30 @@
     gap: 10px;
 }
 
-/* Card Styles */
 .card {
-    background: #3e3e3e;
-    padding: 10px;
-    margin: 0px;
-    cursor: pointer;
-    transition: transform 0.2s;
-    width: 200px;
-    max-width: 200px;
-    display: flex;
-    flex-basis: auto;
-    align-items: center;
-    justify-content: center; /* Center content vertically */
-    position: relative;
-    overflow: hidden; /* Hide content that overflows */
+  background: #3e3e3e;
+  padding: 10px;
+  margin: 0px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  /* Removed width and max-width from card img */
+  display: flex;
+  flex-basis: auto;
+  align-items: center;
+  justify-content: center; /* Center content vertically */
+  position: relative;
+  overflow: hidden; /* Hide content that overflows */
 }
 
 .card-title {
-    text-align: center;
-    position: absolute;  /* Position title within the card */
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%); /* Center the title */
-    z-index: 1; /* Ensure title is above the image */
-    width: 100%; /* Allow title to take up full card width */
-    padding: 10px; /* Optional padding for better readability */
-}
-
-.card img {
-  width: 100%;
-  height: 100%; /* Adjust to leave space for title */
+  text-align: center;
+  position: absolute; /* Position title within the card */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* Center the title */
+  z-index: 1; /* Ensure title is above the image */
+  width: 100%; /* Allow title to take up full card width */
+  padding: 10px; /* Optional padding for better readability */
 }
 
 .config-button {
@@ -100,9 +93,8 @@
   
   .image-container img {
     width: 100%;
-    height: 100%;
-    object-fit: contain; /*  The image will scale to maintain aspect ratio 
-                             while fitting within the container */ 
+    /* height is not specified, allowing it to adjust based on width and aspect ratio */
+    object-fit: crop;
   }
 
   .card video { /* Example styles for video thumbnails */
